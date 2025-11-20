@@ -1,8 +1,7 @@
-
   "name": "env",
   "version": "1.0.0",
   "description": "",
-  "main": "index.js",
+  "main": "bot.js",
 "scripts": {
   "start": "node bot.js",
   "dinant": "node dinantbot.js"
