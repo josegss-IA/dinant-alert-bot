@@ -1,0 +1,20 @@
+
+  "name": "env",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+"scripts": {
+  "start": "node bot.js",
+  "dinant": "node dinantbot.js"
+}
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "dotenv": "^17.2.3",
+    "node-fetch": "^3.3.2",
+    "node-telegram-bot-api": "^0.66.0",
+    "openai": "^6.9.1",
+    "telegraf": "^4.16.3"
+  }
+}
