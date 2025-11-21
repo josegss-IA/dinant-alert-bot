@@ -104,7 +104,7 @@ receiverBot.on("channel_post", async (msg) => {
       return;
     }
 
-    // Aquí SOLO analizamos para log. Si no quieres gastar tokens, puedes comentar esto.
+    // Análisis solo para log (no responde en el canal)
     const completion = await openai.chat.completions.create({
       model: "gpt-4o-mini",
       messages: [
@@ -120,8 +120,6 @@ receiverBot.on("channel_post", async (msg) => {
     const aiResponse = completion.choices[0]?.message?.content || "";
     console.log("🤖 [CANAL] Respuesta OpenAI (solo log):", aiResponse);
 
-    // Si en el futuro quieres push a otro lado, aquí se puede enviar.
-
   } catch (err) {
     console.error("❌ Error procesando mensaje de canal:", err.message || err.toString());
   }
@@ -130,27 +128,25 @@ receiverBot.on("channel_post", async (msg) => {
 // -----------------------------
 // 💬 BOT DE CHAT: INTERFAZ PARA CONSULTAS
 // -----------------------------
-
-// Mensaje de bienvenida y ayuda básica
 chatBot.on("message", async (msg) => {
   const chatId = msg.chat.id;
   const text = (msg.text || "").trim();
 
   if (!text) return;
 
-  // Comandos básicos
+  // /start
   if (text === "/start") {
-    await chatBot.sendMessage(
-      chatId,
+    const msgText =
       "Hola, soy el bot de análisis de alertas Dinant.\n\n" +
-        "Comandos disponibles:\n" +
-        "/ultimo - Analizar la última alerta recibida del canal\n" +
-        "/resumen - Resumen de las últimas 20 alertas\n" +
-        "O mándame una pregunta libre sobre las alertas (ej: '¿cuántas alertas hay de la última hora?')."
-    );
+      "Comandos disponibles:\n" +
+      "/ultimo - Analizar la última alerta recibida del canal\n" +
+      "/resumen - Resumen de las últimas 20 alertas\n" +
+      "O mándame una pregunta libre sobre las alertas (ej: '¿cuántas alertas hay de la última hora?').";
+    await chatBot.sendMessage(chatId, msgText);
     return;
   }
 
+  // /ultimo
   if (text === "/ultimo") {
     const all = loadMessages();
     if (all.length === 0) {
@@ -185,11 +181,14 @@ Fecha (epoch): ${last.date}
       });
 
       const aiResponse = completion.choices[0]?.message?.content || "No pude generar análisis.";
-      await chatBot.sendMessage(
-        chatId,
-        `📌 *Última alerta:*\n${last.text}\n\n🤖 *Análisis:*\n${aiResponse}`,
-        { parse_mode: "Markdown" }
-      );
+      const reply =
+        "📌 Última alerta:\n" +
+        last.text +
+        "\n\n" +
+        "🤖 Análisis:\n" +
+        aiResponse;
+
+      await chatBot.sendMessage(chatId, reply); // SIN parse_mode
     } catch (err) {
       console.error("❌ Error en /ultimo:", err.message || err.toString());
       await chatBot.sendMessage(chatId, "Hubo un error analizando la última alerta.");
@@ -197,6 +196,7 @@ Fecha (epoch): ${last.date}
     return;
   }
 
+  // /resumen
   if (text === "/resumen") {
     const all = loadMessages();
     if (all.length === 0) {
@@ -232,9 +232,11 @@ ${joined}
       });
 
       const aiResponse = completion.choices[0]?.message?.content || "No pude generar el resumen.";
-      await chatBot.sendMessage(chatId, `📊 *Resumen de las últimas alertas:*\n\n${aiResponse}`, {
-        parse_mode: "Markdown"
-      });
+      const reply =
+        "📊 Resumen de las últimas alertas:\n\n" +
+        aiResponse;
+
+      await chatBot.sendMessage(chatId, reply); // SIN parse_mode
     } catch (err) {
       console.error("❌ Error en /resumen:", err.message || err.toString());
       await chatBot.sendMessage(chatId, "Hubo un error generando el resumen.");
@@ -242,8 +244,7 @@ ${joined}
     return;
   }
 
-  // Pregunta libre del usuario sobre las alertas
-  // (estadísticas, geolocalización, patrones, etc.)
+  // Pregunta libre
   const all = loadMessages();
   if (all.length === 0) {
     await chatBot.sendMessage(
@@ -253,7 +254,7 @@ ${joined}
     return;
   }
 
-  const last50 = all.slice(-50); // límite para no mandar demasiado texto
+  const last50 = all.slice(-50);
   const context = last50.map((m, i) => `${i + 1}. ${m.text}`).join("\n");
 
   const freePrompt = `
@@ -282,7 +283,7 @@ Responde en español y, si no puedes responder con precisión, explícalo y sugi
     });
 
     const aiResponse = completion.choices[0]?.message?.content || "No pude responder a la consulta.";
-    await chatBot.sendMessage(chatId, aiResponse);
+    await chatBot.sendMessage(chatId, aiResponse); // SIN parse_mode
   } catch (err) {
     console.error("❌ Error en pregunta libre:", err.message || err.toString());
     await chatBot.sendMessage(chatId, "Hubo un error procesando tu pregunta.");
