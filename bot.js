@@ -4,23 +4,41 @@ const path = require("path");
 const TelegramBot = require("node-telegram-bot-api");
 const OpenAI = require("openai");
 
-// 🔑 Tokens
-const RECEIVER_BOT_TOKEN = process.env.RECEIVER_BOT_TOKEN;
-const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
-const CHANNEL_ID = Number(process.env.CHANNEL_ID);
+// -----------------------------
+// 🔑 VARIABLES DE ENTORNO
+// -----------------------------
+const RECEIVER_BOT_TOKEN = String(process.env.RECEIVER_BOT_TOKEN || "");
+const OPENAI_API_KEY = String(process.env.OPENAI_API_KEY || "");
+const CHANNEL_ID = String(process.env.CHANNEL_ID || "");
 
 if (!RECEIVER_BOT_TOKEN || !OPENAI_API_KEY || !CHANNEL_ID) {
-  console.error("❌ Faltan variables en .env");
+  console.error("❌ ERROR: Faltan variables en Railway (RECEIVER_BOT_TOKEN, OPENAI_API_KEY o CHANNEL_ID)");
   process.exit(1);
 }
 
-// 🤖 Bot receptor
+// Log mínimo para verificar que cargó bien (sin mostrar token completo)
+console.log("✅ Variables cargadas:");
+console.log("   CHANNEL_ID:", CHANNEL_ID);
+console.log("   RECEIVER_BOT_TOKEN empieza con:", RECEIVER_BOT_TOKEN.slice(0, 10), "...");
+
+// -----------------------------
+// 🤖 BOT TELEGRAM (POLLING)
+// -----------------------------
 const receiverBot = new TelegramBot(RECEIVER_BOT_TOKEN, { polling: true });
 
-// 🧠 OpenAI
+// Manejar errores de polling (como EFATAL / AggregateError)
+receiverBot.on("polling_error", (err) => {
+  console.error("🚨 polling_error:", err.code || "", err.message || err.toString());
+});
+
+// -----------------------------
+// 🧠 OPENAI
+// -----------------------------
 const openai = new OpenAI({ apiKey: OPENAI_API_KEY });
 
-// 📁 Archivo JSON donde se guardan los mensajes
+// -----------------------------
+// 📁 ARCHIVO messages.json
+// -----------------------------
 const messagesFilePath = path.join(__dirname, "messages.json");
 
 function appendMessageToFile(messageData) {
@@ -28,27 +46,39 @@ function appendMessageToFile(messageData) {
 
   if (fs.existsSync(messagesFilePath)) {
     try {
-      data = JSON.parse(fs.readFileSync(messagesFilePath, "utf8") || "[]");
+      const fileContent = fs.readFileSync(messagesFilePath, "utf8") || "[]";
+      data = JSON.parse(fileContent);
+      if (!Array.isArray(data)) data = [];
     } catch (err) {
-      console.error("⚠️ Error leyendo messages.json:", err.message);
+      console.error("⚠️ Error leyendo messages.json, se reinicia como []:", err.message);
+      data = [];
     }
   }
 
   data.push(messageData);
 
-  fs.writeFileSync(messagesFilePath, JSON.stringify(data, null, 2), "utf8");
+  try {
+    fs.writeFileSync(messagesFilePath, JSON.stringify(data, null, 2), "utf8");
+  } catch (err) {
+    console.error("⚠️ Error escribiendo messages.json:", err.message);
+  }
 }
 
-// 🔊 Log
-console.log(`🤖 Bot escuchando canal ${CHANNEL_ID}...`);
+// -----------------------------
+// 🚀 LOG INICIAL
+// -----------------------------
+console.log(`🤖 Bot escuchando SOLO el canal ${CHANNEL_ID}...`);
 
-// 🔥 Listener principal
-receiverBot.on("message", async (msg) => {
+// -----------------------------
+// 🔥 LISTENER DE MENSAJES DESDE CANAL
+// -----------------------------
+// IMPORTANTE: para CANALES se usa "channel_post", NO "message"
+receiverBot.on("channel_post", async (msg) => {
   try {
-    const chatId = msg.chat.id;
-    const text = msg.text || "";
+    const chatId = String(msg.chat.id);
+    const text = msg.text || msg.caption || "";
 
-    // Solo canal específico
+    // FILTRO: solo procesar el canal configurado
     if (chatId !== CHANNEL_ID) return;
 
     console.log("📩 Mensaje recibido del canal:", text);
@@ -63,24 +93,33 @@ receiverBot.on("message", async (msg) => {
 
     appendMessageToFile(messageData);
 
-    if (!text.trim()) return;
+    if (!text || !text.trim()) {
+      console.log("⚠️ Mensaje vacío, no se envía a OpenAI.");
+      return;
+    }
 
-    // Llamada a OpenAI
+    // -----------------------------
+    // 🧠 OPENAI - análisis de alerta
+    // -----------------------------
     const completion = await openai.chat.completions.create({
       model: "gpt-4o-mini",
       messages: [
         {
           role: "system",
           content:
-            "Eres un asistente que analiza alertas de geocercas Dinant."
+            "Eres un asistente que analiza mensajes de alertas de geocercas Dinant. Resume brevemente el evento, identifica la ubicación (si existe), y determina si parece una alerta crítica o informativa."
         },
         { role: "user", content: text }
       ]
     });
 
-    console.log("🤖 Respuesta OpenAI:", completion.choices[0].message.content);
+    const aiResponse = completion.choices[0]?.message?.content || "";
+    console.log("🤖 Respuesta OpenAI:", aiResponse);
+
+    // Si en el futuro quieres que el bot RESPONDA en el canal, aquí iría:
+    // await receiverBot.sendMessage(CHANNEL_ID, aiResponse);
 
   } catch (err) {
-    console.error("❌ Error procesando:", err.message);
+    console.error("❌ Error procesando mensaje:", err.message || err.toString());
   }
 });
