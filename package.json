@@ -1,11 +1,12 @@
-  "name": "env",
+{
+  "name": "dinant-alert-bot",
   "version": "1.0.0",
   "description": "",
   "main": "bot.js",
-"scripts": {
-  "start": "node bot.js",
-  "dinant": "node dinantbot.js"
-}
+  "scripts": {
+    "start": "node bot.js",
+    "dinant": "node dinantbot.js"
+  },
   "keywords": [],
   "author": "",
   "license": "ISC",
